@@ -5,14 +5,14 @@
 
 2. Register your local app:
     - Choose the SMART DSTU sandbox
-    - Click 'Register New App Manually'
-        App Type: Public Client
-        App Name: Your App Name
-        App Launch URI: http://localhost:8000/launch.html
-        App Redirect URIs: http://localhost:8000/
-        Allow Offline Access: _
-        Patient Scoped App: x
-        App Logo (Upload one if you want)
+    - Click '+ Register New App Manually'
+        - App Type: Public Client
+        - App Name: Your App Name
+        - App Launch URI: http://localhost:8000/launch.html
+        - App Redirect URIs: http://localhost:8000/
+        - Allow Offline Access: _
+        - Patient Scoped App: x
+        - App Logo (Upload one if you want)
     - Click Save; Take note of the generated app client ID.
 
 3. Clone this repo; CD to the cloned directory and start a local http server:
