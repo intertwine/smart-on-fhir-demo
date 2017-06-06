@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html>
+  <head>
+
+
+    <title>Vax</title>
+      <script src="jquery.js"></script>
+      <script src="underscore.js"></script>
+      <script src="moment.js"></script>
+      <script src='fhir-client.js'></script>
+    <!-- Compiled and minified CSS -->
+      <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/0.98.2/css/materialize.min.css">
+
+      <!-- Compiled and minified JavaScript -->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/0.98.2/js/materialize.min.js"></script>
+          
+    <meta name="viewport" content="initial-scale=1">
+    <style>
+      body, html, table{ min-width: 100%; max-width: 100%; width: 100%;min-height: 100%; max-height: 100%; height: 100%; }
+      td {text-align: center; vertical-align: middle;}
+      body{background: url(vax.jpg) no-repeat center center fixed;   background-size: cover;}
+      #main{  padding:15px; border-top:1px solid black; position: fixed;bottom: 0px; min-width: 100%; max-width: 100%; width: 100%; background: lightgray; max-height: 20%;min-height: 20%;height: 20%; overflow-x: scroll;}
+      .imgInsert {margin:0px 10px; position: relative;float: left; max-height: 100%;min-height: 100%;height: 100%;}
+    #main img, #main video{  max-height: 100%;min-height: 100%;height: 100%; position: relative;float: left; }
+    .btn{margin:10px 0px;}
+
+    #imgCaptureContainer{ text-align: center; max-height: 80%;min-height: 80%;height: 80%; position: absolute;top:0px; left:0px;min-width: 100%; max-width: 100%; width: 100%; margin-bottom: 20%;}
+
+    canvas{ position: fixed;left:-1000px;  }
+    </style>
+
+  </head>
+  <body>
+  <table id="main">
+    <tr>
+      <td><button class="waves-effect waves-light btn" onClick="doAuth()">Log In to Vax</button></td>
+    </tr>
+
+  </table>
+  
+
+  <script>
+
+  var myApp = {}
+  myApp.domain = "https://cyte.github.io/"
+
+  var dfd = {};
+  dfd["Patient"] = $.Deferred();
+  dfd["Immunization"] = $.Deferred();
+  dfd["RelatedPerson"] = $.Deferred();
+
+  $.when(dfd["Patient"], dfd["Immunization"]).then(function(){ paintMain(); })
+
+
+///auth
+myApp.server = "https://fhir-ehr.sandboxcerner.com/dstu2/0b8a0111-e8e6-4c26-a91c-5069cbc6b1ca"
+myApp.tenant = "0b8a0111-e8e6-4c26-a91c-5069cbc6b1ca"
+myApp.appClientId = "151469d8-b01a-4924-8023-3e775fcfd551"
+myApp.scopes = "patient/Immunization.read patient/Patient.read patient/RelatedPerson.read launch profile openid online_access"
+myApp.oauth = {}
+myApp.oauth.code = getCodes("code")
+myApp.state = getCodes("state")
+//myApp.state = guid()
+sessionStorage['uuid'] = myApp.state
+
+//message that we got past auth and close auth
+if (window.opener){
+  window.opener.postMessage(window.location.href, myApp.domain);      
+}
+
+function checkTokenTime(){
+  var d = JSON.parse(sessionStorage["token"])
+  if ( moment(d.token_time).add(d.expires_in, "seconds").valueOf() > moment().valueOf() ){ 
+    return true 
+  }else{ 
+    return false; 
+  } 
+}
+
+if (sessionStorage["token"] && checkTokenTime() === true ){
+  myApp.token = JSON.parse(sessionStorage["token"])
+  getFHIR()
+}
+else if(window.opener){
+ ///if this is redirect from oauth, in the child window, stop it  
+}
+else{
+  //noauth
+   getToken() 
+  
+}
+
+
+
+
+
+
+function getToken(){
+
+
+    if (myApp.state && sessionStorage['uuid'] !== myApp.state){ alert("wrong state"); return false(); }
+
+    $.ajax({
+      url: "https://authorization.sandboxcerner.com/tenants/"+myApp.tenant+"/protocols/oauth2/profiles/smart-v1/token?grant_type=authorization_code&code="+myApp.oauth.code+"&client_id="+myApp.appClientId+"&state="+myApp.state,
+      type: "POST",
+      crossDomain: true,
+      beforeSend: function(xhr){
+        xhr.setRequestHeader('Accept', 'application/json');
+        xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded'); 
+      },
+      success:function(data){  
+          data.token_time = moment().format()
+          sessionStorage["token"] = JSON.stringify(data); 
+          myApp.token = data; 
+          getFHIR(); 
+      },
+      complete:function(jqXHR, xhr){console.log("complete: "+jqXHR.getAllResponseHeaders())},
+      error:function(data, status, xhr){console.log("error: "+JSON.stringify(data))},    
+    })
+
+
+
+  }
+
+
+  function getFHIR(){
+    typicalFHIRGet("Patient", "_id ="+myApp.token.patient)
+    typicalFHIRGet("Immunization", "patient="+myApp.token.patient)    
+//    typicalFHIRGet("RelatedPerson","patient="+myApp.token.patient)
+  }
+
+  function paintMain(){
+    var toInsert = ""
+    _.each(myApp.Immunization.entry, function(val,index){
+        toInsert += "<p>"+val.resource.vaccineCode.text+" "+moment(val.resource.date).format("MM-DD-YYYY")+"</p>"       
+    })
+    $("#main").html(toInsert)
+  }
+
+
+
+
+
+
+
+
+
+function doAuth(){
+  var width = 780,
+      height = 550,
+      left = (screen.width - width) / 2,
+      top = (screen.height - height) / 2,
+      uniqueWindowId = "authorization-" + myApp.appClientId,
+      params,
+      location;
+  if (top > 20) {
+    top = top - 20;
+  }
+  params = 'width=' + width + ', height=' + height;
+  params += ', top=' + top + ', left=' + left;
+  params += 'titlebar=no, location=yes';
+  location = build_oauth_request_url();
+  loginWindow = window.open(location, uniqueWindowId, params);
+
+//close referrer
+  window.addEventListener("message", function (e) {
+    console.log(e)
+    var oauthMessage = e.data;
+    loginWindow.close();
+    window.location = e.data;
+  }, false);
+}
+
+function build_oauth_request_url(){
+  return "https://authorization.sandboxcerner.com/tenants/0b8a0111-e8e6-4c26-a91c-5069cbc6b1ca/protocols/oauth2/profiles/smart-v1/personas/patient/authorize?client_id="+myApp.appClientId+"&response_type=code&redirect_uri=&scope="+encodeURI(myApp.scopes)+"&launch=&aud=https%3A%2F%2Ffhir-ehr.sandboxcerner.com%2Fdstu2%2F0b8a0111-e8e6-4c26-a91c-5069cbc6b1ca%2F&state="+myApp.state
+}
+
+
+
+//fix for fhirjs
+
+  function typicalFHIRGet(resource, params){
+
+    $.ajax({
+      url: myApp.server+"/"+resource+"?"+params,
+      type: "GET",
+      crossDomain: true,
+      beforeSend: function(xhr){
+            xhr.setRequestHeader('Accept', 'application/json');
+        xhr.setRequestHeader('Content-Type', 'application/json+fhir'); 
+        xhr.setRequestHeader('Authorization', 'Bearer '+myApp.token.access_token)     
+      },
+      success:function(data){ myApp[resource] = data; dfd[resource].resolve()},
+      complete:function(jqXHR, xhr){console.log("complete: "+jqXHR.getAllResponseHeaders())},
+      error:function(data, status, xhr){console.log("error: "+JSON.stringify(data))},    
+    })
+
+  }
+
+
+
+
+
+
+/*
+//getMetadata()
+  function getMetadata(){
+
+
+
+    $.ajax({
+      url: myApp.server+"/metadata",
+      type: "GET",
+      crossDomain: true,
+      beforeSend: function(xhr){
+            xhr.setRequestHeader('Accept', 'application/json');
+        xhr.setRequestHeader('Content-Type', 'application/json+fhir'); 
+      },
+      success:function(data){ myApp.metadata = data; dfdGotMetadata.resolve()},
+      complete:function(jqXHR, xhr){console.log("complete: "+jqXHR.getAllResponseHeaders())},
+      error:function(data, status, xhr){console.log("error: "+JSON.stringify(data))},    
+    })
+  }
+*/
+    //end authflow
+
+///
+
+//utils
+  function getCodes(p){
+      var query = location.search.substr(1);
+      var data = query.split("&");
+      var result = [];
+
+      for(var i=0; i<data.length; i++) {
+        var item = data[i].split("=");
+        if (item[0] === p) {
+          var res = item[1].replace(/\+/g, '%20');
+          return decodeURIComponent(res);
+        }
+      }   
+  }
+
+////
+
+  function guid() {
+    function s4() {
+      return Math.floor((1 + Math.random()) * 0x10000)
+        .toString(16)
+        .substring(1);
+    }
+    return s4() + s4() + '-' + s4() + '-' + s4() + '-' +
+      s4() + '-' + s4() + s4() + s4();
+  }
+
+
+  </script>
+
+  </body>
+</html>

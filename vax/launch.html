@@ -1,0 +1,13 @@
+<html>
+	<head>
+		<script src="fhir-client.js"></script>
+	</head>
+
+	<script>
+	FHIR.oauth2.authorize({
+        'client_id': '151469d8-b01a-4924-8023-3e775fcfd551',
+        'scope':  'launch patient/Immunization.read patient/Patient.read patient/RelatedPerson.read openid profile'
+	});
+
+	</script>
+</html>
